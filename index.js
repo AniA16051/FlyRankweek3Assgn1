@@ -1,17 +1,44 @@
 const express = require('express');
+const swaggerUi = require('swagger-ui-express');
+const fs = require('fs');
+
 const app = express();
 const PORT = 3000;
+
+// In-memory task list
 let tasks = [
   { id: 1, title: "Do HackerRank", done: false },
   { id: 2, title: "Finish DeathTroopers", done: true },
   { id: 3, title: "Task3", done: false }
 ];
-// Middleware to parse incoming JSON bodies
 
+// Middleware to parse incoming JSON bodies
 app.use(express.json());
-//stage2
-app.get('/tasks', (req, res) => { res.json(tasks);});
-//stage2tasklist
+
+// Stage 5: Serve Swagger UI at /docs
+const swaggerDocument = JSON.parse(fs.readFileSync('./openapi.json', 'utf8'));
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// Stage 0 & 1: Root endpoint describing your API
+app.get('/', (req, res) => {
+  res.json({
+    name: "Task API",
+    version: "1.0",
+    endpoints: ["/tasks"]
+  });
+});
+
+// Stage 1: Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: "ok" });
+});
+
+// Stage 2: Read - Get the whole task list
+app.get('/tasks', (req, res) => { 
+  res.json(tasks); 
+});
+
+// Stage 2: Read - Get a single task by ID with 404 handling
 app.get('/tasks/:id', (req, res) => {
   const taskId = parseInt(req.params.id);
   const task = tasks.find(t => t.id === taskId);
@@ -23,16 +50,14 @@ app.get('/tasks/:id', (req, res) => {
   res.json(task);
 });
 
-// Stage 3: Create a new task
+// Stage 3: Create a new task (POST)
 app.post('/tasks', (req, res) => {
   const { title } = req.body;
 
-  // Validate input: title must exist and not be empty
   if (!title || title.trim() === "") {
     return res.status(400).json({ error: "Title is required and cannot be empty" });
   }
 
-  // Generate the next free id (if list is empty, start at 1, otherwise increment max id)
   const nextId = tasks.length > 0 ? tasks[tasks.length - 1].id + 1 : 1;
 
   const newTask = {
@@ -42,8 +67,6 @@ app.post('/tasks', (req, res) => {
   };
 
   tasks.push(newTask);
-
-  // Return 201 Created with the new task
   res.status(201).json(newTask);
 });
 
@@ -58,7 +81,6 @@ app.put('/tasks/:id', (req, res) => {
 
   const { title, done } = req.body;
 
-  // Validate that at least one field is provided and title isn't an empty string if provided
   if (title === undefined && done === undefined) {
     return res.status(400).json({ error: "Request body must contain 'title' or 'done' to update" });
   }
@@ -89,27 +111,11 @@ app.delete('/tasks/:id', (req, res) => {
     return res.status(404).json({ error: `Task ${taskId} not found` });
   }
 
-  // Remove task from the array
   tasks.splice(taskIndex, 1);
-
-  // Return 204 No Content with an empty body
   res.status(204).send();
 });
-// Stage 0 & 1: Root endpoint describing your API
-app.get('/', (req, res) => {
-  res.json({
-    name: "Task API",
-    version: "1.0",
-    endpoints: ["/tasks"]
-  });
-});
 
-// Stage 1: Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: "ok" });
-});
-
-// Start server
+// Start server once at the bottom
 app.listen(PORT, () => {
   console.log(`Server started on http://localhost:${PORT}`);
 });
