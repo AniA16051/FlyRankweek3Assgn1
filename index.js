@@ -22,6 +22,30 @@ app.get('/tasks/:id', (req, res) => {
 
   res.json(task);
 });
+
+// Stage 3: Create a new task
+app.post('/tasks', (req, res) => {
+  const { title } = req.body;
+
+  // Validate input: title must exist and not be empty
+  if (!title || title.trim() === "") {
+    return res.status(400).json({ error: "Title is required and cannot be empty" });
+  }
+
+  // Generate the next free id (if list is empty, start at 1, otherwise increment max id)
+  const nextId = tasks.length > 0 ? tasks[tasks.length - 1].id + 1 : 1;
+
+  const newTask = {
+    id: nextId,
+    title: title.trim(),
+    done: false
+  };
+
+  tasks.push(newTask);
+
+  // Return 201 Created with the new task
+  res.status(201).json(newTask);
+});
 // Stage 0 & 1: Root endpoint describing your API
 app.get('/', (req, res) => {
   res.json({
