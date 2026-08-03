@@ -46,6 +46,55 @@ app.post('/tasks', (req, res) => {
   // Return 201 Created with the new task
   res.status(201).json(newTask);
 });
+
+// Stage 4: Update an existing task (PUT)
+app.put('/tasks/:id', (req, res) => {
+  const taskId = parseInt(req.params.id);
+  const task = tasks.find(t => t.id === taskId);
+
+  if (!task) {
+    return res.status(404).json({ error: `Task ${taskId} not found` });
+  }
+
+  const { title, done } = req.body;
+
+  // Validate that at least one field is provided and title isn't an empty string if provided
+  if (title === undefined && done === undefined) {
+    return res.status(400).json({ error: "Request body must contain 'title' or 'done' to update" });
+  }
+
+  if (title !== undefined) {
+    if (typeof title !== 'string' || title.trim() === "") {
+      return res.status(400).json({ error: "Title cannot be empty" });
+    }
+    task.title = title.trim();
+  }
+
+  if (done !== undefined) {
+    if (typeof done !== 'boolean') {
+      return res.status(400).json({ error: "Field 'done' must be a boolean (true/false)" });
+    }
+    task.done = done;
+  }
+
+  res.json(task);
+});
+
+// Stage 4: Delete a task (DELETE)
+app.delete('/tasks/:id', (req, res) => {
+  const taskId = parseInt(req.params.id);
+  const taskIndex = tasks.findIndex(t => t.id === taskId);
+
+  if (taskIndex === -1) {
+    return res.status(404).json({ error: `Task ${taskId} not found` });
+  }
+
+  // Remove task from the array
+  tasks.splice(taskIndex, 1);
+
+  // Return 204 No Content with an empty body
+  res.status(204).send();
+});
 // Stage 0 & 1: Root endpoint describing your API
 app.get('/', (req, res) => {
   res.json({
