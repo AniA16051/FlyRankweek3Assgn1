@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS tasks (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  done BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+INSERT INTO tasks (title, done) 
+SELECT 'Do HackerRank', FALSE WHERE NOT EXISTS (SELECT 1 FROM tasks);
+
+INSERT INTO tasks (title, done) 
+SELECT 'Finish DeathTroopers', TRUE WHERE NOT EXISTS (SELECT 1 FROM tasks);
+
+INSERT INTO tasks (title, done) 
+SELECT 'Task3', FALSE WHERE NOT EXISTS (SELECT 1 FROM tasks);

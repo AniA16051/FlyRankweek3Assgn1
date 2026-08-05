@@ -1,32 +1,17 @@
+require('dotenv').config();
 const express = require('express');
 const swaggerUi = require('swagger-ui-express');
 const fs = require('fs');
 
+const PostgresTaskRepository = require('./src/repositories/PostgresTaskRepository');
+// To swap back to InMemory repository:
+// const InMemoryTaskRepository = require('./src/repositories/InMemoryTaskRepository');
+
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-const Database = require('better-sqlite3');
-
-// Initialize database
-const db = new Database('tasks.db');
-
-// Create tasks table if it doesn't exist
-db.exec(`
-  CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    done BOOLEAN NOT NULL DEFAULT 0
-  );
-`);
-
-// Insert initial seed data if table is empty
-const countRow = db.prepare('SELECT COUNT(*) as count FROM tasks').get();
-if (countRow.count === 0) {
-  const insert = db.prepare('INSERT INTO tasks (title, done) VALUES (?, ?)');
-  insert.run('Do HackerRank', 0);
-  insert.run('Finish DeathTroopers', 1);
-  insert.run('Task3', 0);
-}
+// Initialize repository (Postgres repository swapped in)
+const taskRepo = new PostgresTaskRepository(process.env.DATABASE_URL);
 
 // Middleware to parse incoming JSON bodies
 app.use(express.json());
@@ -50,100 +35,90 @@ app.get('/health', (req, res) => {
 });
 
 // Stage 2: Read - Get the whole task list
-app.get('/tasks', (req, res) => { 
-  const tasks = db.prepare('SELECT id, title, done FROM tasks').all().map(t => ({
-    ...t,
-    done: Boolean(t.done)
-  }));
-  res.json(tasks); 
+app.get('/tasks', async (req, res) => {
+  try {
+    const tasks = await taskRepo.getAll();
+    res.json(tasks);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch tasks" });
+  }
 });
 
 // Stage 2: Read - Get a single task by ID with 404 handling
-app.get('/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id);
-  const task = db.prepare('SELECT id, title, done FROM tasks WHERE id = ?').get(taskId);
-
-  if (!task) {
-    return res.status(404).json({ error: `Task ${taskId} not found` });
+app.get('/tasks/:id', async (req, res) => {
+  const taskId = parseInt(req.params.id, 10);
+  try {
+    const task = await taskRepo.getById(taskId);
+    if (!task) {
+      return res.status(404).json({ error: `Task ${taskId} not found` });
+    }
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch task" });
   }
-
-  res.json({
-    ...task,
-    done: Boolean(task.done)
-  });
 });
 
 // Stage 3: Create a new task (POST)
-app.post('/tasks', (req, res) => {
+app.post('/tasks', async (req, res) => {
   const { title } = req.body;
 
   if (!title || title.trim() === "") {
     return res.status(400).json({ error: "Title is required and cannot be empty" });
   }
 
-  const stmt = db.prepare('INSERT INTO tasks (title, done) VALUES (?, ?)');
-  const info = stmt.run(title.trim(), 0);
-
-  const newTask = {
-    id: Number(info.lastInsertRowid),
-    title: title.trim(),
-    done: false
-  };
-
-  res.status(201).json(newTask);
+  try {
+    const newTask = await taskRepo.create(title.trim());
+    res.status(201).json(newTask);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create task" });
+  }
 });
 
 // Stage 4: Update an existing task (PUT)
-app.put('/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id);
-  const task = db.prepare('SELECT id, title, done FROM tasks WHERE id = ?').get(taskId);
-
-  if (!task) {
-    return res.status(404).json({ error: `Task ${taskId} not found` });
-  }
-
+app.put('/tasks/:id', async (req, res) => {
+  const taskId = parseInt(req.params.id, 10);
   const { title, done } = req.body;
 
   if (title === undefined && done === undefined) {
     return res.status(400).json({ error: "Request body must contain 'title' or 'done' to update" });
   }
 
-  let updatedTitle = task.title;
-  let updatedDone = task.done;
-
-  if (title !== undefined) {
-    if (typeof title !== 'string' || title.trim() === "") {
-      return res.status(400).json({ error: "Title cannot be empty" });
-    }
-    updatedTitle = title.trim();
+  if (title !== undefined && (typeof title !== 'string' || title.trim() === "")) {
+    return res.status(400).json({ error: "Title cannot be empty" });
   }
 
-  if (done !== undefined) {
-    if (typeof done !== 'boolean') {
-      return res.status(400).json({ error: "Field 'done' must be a boolean (true/false)" });
-    }
-    updatedDone = done ? 1 : 0;
+  if (done !== undefined && typeof done !== 'boolean') {
+    return res.status(400).json({ error: "Field 'done' must be a boolean (true/false)" });
   }
 
-  db.prepare('UPDATE tasks SET title = ?, done = ? WHERE id = ?').run(updatedTitle, updatedDone, taskId);
+  try {
+    const updated = await taskRepo.update(taskId, {
+      title: title !== undefined ? title.trim() : undefined,
+      done
+    });
 
-  res.json({
-    id: taskId,
-    title: updatedTitle,
-    done: Boolean(updatedDone)
-  });
+    if (!updated) {
+      return res.status(404).json({ error: `Task ${taskId} not found` });
+    }
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update task" });
+  }
 });
 
 // Stage 4: Delete a task (DELETE)
-app.delete('/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id);
-  const info = db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId);
-
-  if (info.changes === 0) {
-    return res.status(404).json({ error: `Task ${taskId} not found` });
+app.delete('/tasks/:id', async (req, res) => {
+  const taskId = parseInt(req.params.id, 10);
+  try {
+    const deleted = await taskRepo.delete(taskId);
+    if (!deleted) {
+      return res.status(404).json({ error: `Task ${taskId} not found` });
+    }
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete task" });
   }
-
-  res.status(204).send();
 });
 
 // Start server once at the bottom
