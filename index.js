@@ -51,19 +51,26 @@ app.get('/health', (req, res) => {
 
 // Stage 2: Read - Get the whole task list
 app.get('/tasks', (req, res) => { 
+  const tasks = db.prepare('SELECT id, title, done FROM tasks').all().map(t => ({
+    ...t,
+    done: Boolean(t.done)
+  }));
   res.json(tasks); 
 });
 
 // Stage 2: Read - Get a single task by ID with 404 handling
 app.get('/tasks/:id', (req, res) => {
   const taskId = parseInt(req.params.id);
-  const task = tasks.find(t => t.id === taskId);
+  const task = db.prepare('SELECT id, title, done FROM tasks WHERE id = ?').get(taskId);
 
   if (!task) {
     return res.status(404).json({ error: `Task ${taskId} not found` });
   }
 
-  res.json(task);
+  res.json({
+    ...task,
+    done: Boolean(task.done)
+  });
 });
 
 // Stage 3: Create a new task (POST)
