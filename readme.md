@@ -24,3 +24,11 @@ Connection: keep-alive
 Keep-Alive: timeout=5
 
 {"status":"ok"}
+
+## SQL Queries Exploration (SQLite)
+During Stage 4, manually verified and executed key SQL queries on `tasks.db`:
+- **List all tasks**: `SELECT * FROM tasks;`
+- **Show completed tasks**: `SELECT * FROM tasks WHERE done = 1;`
+- **Count all tasks**: `SELECT COUNT(*) FROM tasks;`
+- **Mark all tasks completed**: `UPDATE tasks SET done = 1;`
+- **Delete completed tasks**: `DELETE FROM tasks WHERE done = 1;`
