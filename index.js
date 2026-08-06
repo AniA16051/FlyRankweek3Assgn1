@@ -121,7 +121,9 @@ app.delete('/tasks/:id', async (req, res) => {
   }
 });
 
+const supabase = require('./src/supabaseClient');
+
 // Start server once at the bottom
 app.listen(PORT, () => {
-  console.log(`Server started on http://localhost:${PORT}`);
+  console.log(`Server running and connected to Supabase on http://localhost:${PORT}`);
 });
